@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>CamMonitor Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#08080d;--bg2:#0f0f17;--bg3:#17171f;--bg4:#1e1e2a;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#eeeef8;--muted:#707088;
+  --accent:#00e5a0;--red:#ff3c3c;--amber:#ffaa00;--blue:#4488ff;
+  --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
+  --hdr:42px;--bar:50px;--side:300px;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ═══ HEADER ═══ */
+.hdr{height:var(--hdr);display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);animation:blink 2s ease-in-out infinite;transition:background .3s,box-shadow .3s}
+.logo-name{font-size:14px;font-weight:800;letter-spacing:-.3px}
+.logo-tag{font-size:9px;color:var(--muted);font-family:var(--mono)}
+.hdr-right{display:flex;align-items:center;gap:6px}
+.pill{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);font-size:10px;font-family:var(--mono);color:var(--muted)}
+.pill.ok{border-color:var(--accent);color:var(--accent)}
+.pill.rec{border-color:var(--red);color:var(--red);animation:blink .8s infinite}
+.pill-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* ═══ LAYOUT ═══ */
+.app{display:grid;grid-template-columns:1fr var(--side);height:calc(100vh - var(--hdr));overflow:hidden}
+.vpanel{display:flex;flex-direction:column;background:#000;border-right:1px solid var(--border);overflow:hidden}
+.vwrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0;background:#000}
+
+video#remoteVideo{
+  /* Fill the wrapper maintaining 16:9 */
+  width:100%;height:100%;
+  object-fit:contain;
+  display:block;background:#000;
+}
+
+/* nofeed */
+.nofeed{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none;z-index:2}
+.nofeed-ico{width:52px;height:52px;border-radius:50%;border:2px dashed rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:4px}
+.nofeed h2{font-size:16px;font-weight:600;color:rgba(255,255,255,.38)}
+.nofeed p{font-size:11px;color:var(--muted);font-family:var(--mono);text-align:center;line-height:1.6}
+
+/* overlays */
+.rec-badge{position:absolute;top:10px;left:10px;background:var(--red);color:#fff;font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;letter-spacing:1px;display:none;align-items:center;gap:5px;z-index:10}
+.rec-badge.on{display:flex;animation:blink .9s infinite}
+.rec-dot{width:5px;height:5px;border-radius:50%;background:#fff}
+.timecode{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.7);background:rgba(0,0,0,.6);padding:3px 9px;border-radius:4px;pointer-events:none;z-index:10}
+.res-info{position:absolute;bottom:10px;left:10px;font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.5);background:rgba(0,0,0,.5);padding:2px 7px;border-radius:3px;z-index:10}
+
+/* ═══ CONTROLS BAR ═══ */
+.cbar{height:var(--bar);display:flex;align-items:center;gap:7px;padding:0 12px;background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0}
+.spacer{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:0 12px;height:30px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .12s;flex-shrink:0}
+.btn:hover:not(:disabled){border-color:rgba(255,255,255,.22);background:var(--bg4)}
+.btn:active:not(:disabled){transform:scale(.97)}
+.btn:disabled{opacity:.3;cursor:not-allowed}
+.btn.g{background:var(--accent);color:#000;border-color:var(--accent)}
+.btn.g:hover:not(:disabled){background:#00ffb3}
+.btn.r{background:var(--red);color:#fff;border-color:var(--red)}
+.btn.r:hover:not(:disabled){background:#ff6060}
+.btn.y{background:var(--amber);color:#000;border-color:var(--amber)}
+.btn.y:hover:not(:disabled){background:#ffc533}
+
+/* ═══ SIDEBAR ═══ */
+.sidebar{background:var(--bg2);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.sidebar::-webkit-scrollbar{width:3px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.sec{padding:11px 12px;border-bottom:1px solid var(--border)}
+.sec-title{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:9px}
+.tabs{display:flex;gap:5px;margin-bottom:10px}
+.tab{flex:1;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--muted);font-size:10px;font-family:var(--mono);cursor:pointer;text-align:center;transition:all .12s}
+.tab.on{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,.07)}
+.cbox{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:10px;margin-bottom:8px}
+.step{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px}
+.step:last-child{margin-bottom:0}
+.snum{width:18px;height:18px;border-radius:50%;flex-shrink:0;background:rgba(0,229,160,.12);border:1px solid rgba(0,229,160,.3);color:var(--accent);font-size:9px;font-family:var(--mono);font-weight:600;display:flex;align-items:center;justify-content:center}
+.stxt{font-size:10px;color:var(--muted);line-height:1.5;font-family:var(--mono)}
+.stxt strong{color:var(--text)}
+.rcode-box{background:var(--bg);border:1px solid var(--accent);border-radius:6px;padding:9px;text-align:center;margin:7px 0;display:none}
+.rcode-lbl{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
+.rcode{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--accent);letter-spacing:5px}
+.rcode-url{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px;word-break:break-all;line-height:1.4}
+.qr-wrap{display:none;justify-content:center;margin:5px 0}
+#qrCanvas{border-radius:5px;border:1px solid var(--border2)}
+.copy-lnk{width:100%;background:rgba(0,229,160,.08);border:1px solid rgba(0,229,160,.22);color:var(--accent);font-family:var(--mono);font-size:10px;padding:5px;border-radius:5px;cursor:pointer;transition:all .12s;display:none}
+.copy-lnk:hover{background:rgba(0,229,160,.16)}
+.ip-hint{font-family:var(--mono);font-size:9px;color:var(--muted);text-align:center;margin-top:4px;display:none}
+#localSec{display:none}
+video#localVideo{width:100%;border-radius:5px;border:1px solid var(--border);background:#000;display:block}
+.cam-sel{width:100%;margin-top:5px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:10px;padding:5px 7px;border-radius:5px;cursor:pointer}
+
+/* Camera remote controls */
+.cam-controls{display:flex;flex-direction:column;gap:8px}
+.ctrl-row{display:flex;align-items:center;gap:8px}
+.ctrl-label{font-family:var(--mono);font-size:9px;color:var(--muted);width:52px;flex-shrink:0;text-transform:uppercase}
+.ctrl-val{font-family:var(--mono);font-size:10px;color:var(--accent);width:32px;text-align:right;flex-shrink:0}
+input[type=range]{flex:1;height:3px;border-radius:2px;-webkit-appearance:none;appearance:none;background:var(--border2);outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent);cursor:pointer}
+input[type=range]:disabled{opacity:.3;cursor:not-allowed}
+.ctrl-btns{display:flex;gap:5px;flex:1}
+.ctrl-btn{flex:1;padding:4px 0;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted);font-family:var(--mono);font-size:9px;cursor:pointer;text-align:center;transition:all .12s}
+.ctrl-btn:hover,.ctrl-btn.on{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,.08)}
+.ctrl-btn.on-red{border-color:var(--red);color:var(--red);background:rgba(255,60,60,.08)}
+.res-sel{flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:9px;padding:4px 6px;border-radius:5px;cursor:pointer}
+
+/* Stats */
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.scard{background:var(--bg3);border-radius:6px;padding:8px 9px;border:1px solid var(--border)}
+.slbl{font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:2px}
+.sval{font-family:var(--mono);font-size:16px;font-weight:600}
+.sval.g{color:var(--accent)}
+
+/* Takes */
+.takes{display:flex;flex-direction:column;gap:5px}
+.take{display:flex;align-items:center;gap:7px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-family:var(--mono)}
+.tnum{font-size:9px;color:var(--muted);min-width:22px}
+.tinfo{flex:1}
+.tname{font-size:10px;font-weight:600}
+.tdur{font-size:9px;color:var(--muted);margin-top:1px}
+.tdl{background:none;border:1px solid var(--border2);color:var(--accent);font-size:9px;font-family:var(--mono);padding:3px 6px;border-radius:3px;cursor:pointer;transition:all .1s}
+.tdl:hover{background:rgba(0,229,160,.1)}
+.no-takes{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;padding:12px 0}
+
+/* ════════════════════════════════
+   PHONE PAGE
+   ════════════════════════════════ */
+.phone-pg{
+  display:none;flex-direction:column;align-items:stretch;
+  height:100vh;background:var(--bg);overflow:hidden;
+}
+
+/* Phone video preview — shows camera feed */
+.ph-preview-wrap{
+  flex:1;position:relative;background:#000;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;min-height:0;
+}
+/* Raw camera preview - shown to user on phone */
+video#phonePrev{
+  width:100%;height:100%;
+  object-fit:cover;display:block;
+}
+/* Hidden canvas used for rotation/processing before streaming */
+canvas#phoneCanvas{display:none}
+
+/* Recording indicator on phone */
+.ph-rec-ind{
+  position:absolute;top:10px;left:10px;z-index:20;
+  background:var(--red);color:#fff;font-family:var(--mono);font-size:11px;
+  padding:4px 10px;border-radius:4px;display:none;align-items:center;gap:5px;
+  animation:blink .9s infinite;
+}
+.ph-rec-ind.on{display:flex}
+.ph-tc{
+  position:absolute;top:10px;right:10px;z-index:20;
+  font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.85);
+  background:rgba(0,0,0,.65);padding:3px 9px;border-radius:4px;display:none;
+}
+.ph-tc.on{display:block}
+
+/* orientation badge on phone preview */
+.ph-orient-badge{
+  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:10px;z-index:15;
+  background:rgba(0,0,0,.7);padding:4px 12px;border-radius:4px;
+  border:1px solid var(--border2);color:var(--amber);
+  white-space:nowrap;
+}
+.ph-orient-badge.ok{color:var(--accent);border-color:rgba(0,229,160,.3)}
+
+/* phone bottom bar */
+.ph-bar{
+  background:var(--bg2);border-top:1px solid var(--border);
+  padding:8px 12px;flex-shrink:0;
+  display:flex;flex-direction:column;gap:8px;
+  max-height:55vh;overflow-y:auto;
+}
+.ph-bar::-webkit-scrollbar{width:2px}
+.ph-bar::-webkit-scrollbar-thumb{background:var(--border2)}
+
+/* top row */
+.ph-toprow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ph-brand{font-size:12px;font-weight:800}
+.ph-connstat{font-size:9px;font-family:var(--mono);color:var(--muted)}
+
+/* Big REC button */
+.ph-recbtn{
+  width:54px;height:54px;border-radius:50%;
+  background:var(--red);border:3px solid rgba(255,255,255,.15);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:18px;transition:all .12s;flex-shrink:0;
+}
+.ph-recbtn:active{transform:scale(.9)}
+.ph-recbtn.rec{background:#7a0000;border-color:var(--red)}
+.ph-takes-lbl{font-family:var(--mono);font-size:9px;color:var(--muted);text-align:center;margin-top:2px}
+
+/* Connect row */
+.ph-connect-row{display:flex;gap:6px;align-items:center}
+.code-inp{
+  flex:1;background:var(--bg3);border:1px solid var(--border2);
+  color:var(--accent);font-family:var(--mono);font-size:18px;font-weight:600;
+  letter-spacing:4px;padding:8px 10px;border-radius:7px;
+  text-align:center;text-transform:uppercase;outline:none;min-width:0;
+}
+.code-inp:focus{border-color:var(--accent)}
+.code-inp::placeholder{font-size:10px;letter-spacing:1px;color:var(--muted)}
+.ph-status{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center}
+
+/* ph controls grid */
+.ph-ctrl-grid{display:flex;flex-direction:column;gap:7px}
+.ph-crow{display:flex;align-items:center;gap:8px}
+.ph-clbl{font-family:var(--mono);font-size:9px;color:var(--muted);width:52px;flex-shrink:0;text-transform:uppercase}
+.ph-cval{font-family:var(--mono);font-size:9px;color:var(--accent);width:30px;text-align:right;flex-shrink:0}
+.ph-cbtns{display:flex;gap:4px;flex:1}
+.ph-cbtn{flex:1;padding:5px 3px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted);font-family:var(--mono);font-size:9px;cursor:pointer;text-align:center;transition:all .12s}
+.ph-cbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,.08)}
+
+/* collapsible sections */
+.ph-sec{margin-top:2px}
+.ph-sec-hdr{
+  font-family:var(--mono);font-size:9px;font-weight:600;color:var(--muted);
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;
+  display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  padding:3px 0;border-bottom:1px solid var(--border);
+}
+.ph-sec-hdr .arr{color:var(--accent);transition:transform .2s;margin-left:4px}
+.ph-sec-hdr.closed .arr{transform:rotate(-90deg)}
+.ph-sec-body{overflow:hidden;transition:max-height .25s ease}
+.ph-sec-body.closed{max-height:0!important}
+
+@media(max-width:767px){
+  .laptop-pg{display:none!important}
+  .phone-pg{display:flex!important}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LAPTOP VIEW ═══════════════ -->
+<div class="laptop-pg" id="laptopPage" style="display:flex;flex-direction:column;height:100vh">
+  <div class="hdr">
+    <div class="logo">
+      <div class="logo-dot" id="logoDot"></div>
+      <div><div class="logo-name">CamMonitor Pro</div><div class="logo-tag">mobile camera studio</div></div>
+    </div>
+    <div class="hdr-right">
+      <span id="resBadge" style="font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px;display:none"></span>
+      <div class="pill" id="connPill"><div class="pill-dot"></div><span id="connTxt">Waiting for phone…</span></div>
+      <div class="pill rec" id="recPill" style="display:none"><div class="pill-dot"></div><span>REC</span></div>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="vpanel">
+      <div class="vwrap">
+        <video id="remoteVideo" autoplay playsinline muted></video>
+        <div class="nofeed" id="nofeed">
+          <div class="nofeed-ico">📱</div>
+          <h2>No Camera Feed</h2>
+          <p>Generate a room code →<br>Open on phone → Connect</p>
+        </div>
+        <div class="rec-badge" id="recBadge"><div class="rec-dot"></div> REC</div>
+        <div class="timecode" id="timecode">00:00:00</div>
+        <div class="res-info" id="resInfo"></div>
+      </div>
+      <div class="cbar">
+        <button class="btn g" id="btnStart" onclick="startRec()" disabled>⏺ Record</button>
+        <button class="btn y" id="btnPause" onclick="togglePause()" disabled>⏸ Pause</button>
+        <button class="btn r" id="btnStop"  onclick="stopRec()"  disabled>⏹ Stop</button>
+        <div class="spacer"></div>
+        <button class="btn" onclick="sendCmd('flip')" id="btnFlip" disabled>🔄 Flip</button>
+        <button class="btn" onclick="toggleMirror()" id="btnMirror">⟷ Mirror</button>
+        <button class="btn" onclick="toggleFS()">⛶ Full</button>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <!-- CONNECTION -->
+      <div class="sec">
+        <div class="sec-title">Connection Mode</div>
+        <div class="tabs">
+          <div class="tab on" id="tabPhone" onclick="setMode('webrtc')">📡 Phone Cam</div>
+          <div class="tab"    id="tabLocal" onclick="setMode('local')">💻 Laptop Cam</div>
+        </div>
+        <div id="webrtcSec">
+          <div class="cbox">
+            <div class="step"><div class="snum">1</div><div class="stxt"><strong>Same WiFi / Hotspot</strong><br>Both devices on same network</div></div>
+            <div class="step"><div class="snum">2</div><div class="stxt"><strong>Open this HTML on phone</strong><br>Transfer file &amp; open in Chrome</div></div>
+            <div class="step"><div class="snum">3</div><div class="stxt"><strong>Type code on phone → Connect</strong><br>Stream is always 16:9 landscape ✓</div></div>
+          </div>
+          <div class="rcode-box" id="rcodeBox">
+            <div class="rcode-lbl">Room Code</div>
+            <div class="rcode" id="rcodeVal">——</div>
+            <div class="rcode-url" id="rcodeUrl"></div>
+          </div>
+          <div class="qr-wrap" id="qrWrap"><canvas id="qrCanvas" width="130" height="130"></canvas></div>
+          <button class="copy-lnk" id="copyBtn" onclick="copyUrl()">📋 Copy link for phone</button>
+          <div class="ip-hint" id="ipHint">↑ scan QR or copy link</div>
+          <button class="btn" onclick="genRoom()" id="genBtn" style="width:100%;margin-top:9px">🔗 Generate Room Code</button>
+        </div>
+        <div id="localSec">
+          <video id="localVideo" autoplay playsinline muted></video>
+          <select class="cam-sel" id="camSel" onchange="switchCam()"><option>Loading…</option></select>
+          <button class="btn g" onclick="startLocalCam()" style="width:100%;margin-top:7px">▶ Start Camera</button>
+        </div>
+      </div>
+
+      <!-- REMOTE CONTROLS -->
+      <div class="sec" id="remoteCtrlSec" style="display:none">
+        <div class="sec-title">📡 Remote Camera Controls</div>
+        <div class="cam-controls">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Quality</span>
+            <select class="res-sel" id="resSelect" onchange="sendCmd('res',this.value)">
+              <option value="4k">4K 3840×2160</option>
+              <option value="2k">2K 2560×1440</option>
+              <option value="1080" selected>1080p</option>
+              <option value="720">720p</option>
+            </select>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Zoom</span>
+            <input type="range" id="zoomSlider" min="1" max="10" step="0.1" value="1" disabled
+              oninput="sendCmd('zoom',this.value);document.getElementById('zoomVal').textContent=parseFloat(this.value).toFixed(1)+'×'">
+            <span class="ctrl-val" id="zoomVal">1×</span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Exposure</span>
+            <input type="range" id="expSlider" min="-4" max="4" step="0.5" value="0" disabled
+              oninput="sendCmd('exposure',this.value);document.getElementById('expVal').textContent=(this.value>0?'+':'')+this.value">
+            <span class="ctrl-val" id="expVal">0</span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Focus</span>
+            <div class="ctrl-btns">
+              <div class="ctrl-btn on" id="fAuto"   onclick="sendCmd('focus','auto');setActive('fAuto','fManual','fMacro')">Auto</div>
+              <div class="ctrl-btn"    id="fManual" onclick="sendCmd('focus','manual');setActive('fManual','fAuto','fMacro');showFocusDist(true)">Manual</div>
+              <div class="ctrl-btn"    id="fMacro"  onclick="sendCmd('focus','macro');setActive('fMacro','fAuto','fManual')">Macro</div>
+            </div>
+          </div>
+          <div class="ctrl-row" id="focusDistRow" style="display:none">
+            <span class="ctrl-label">Dist</span>
+            <input type="range" id="focusDist" min="0" max="1" step="0.01" value="0.5"
+              oninput="sendCmd('focusDist',this.value);document.getElementById('focusDistVal').textContent=parseFloat(this.value).toFixed(2)">
+            <span class="ctrl-val" id="focusDistVal">0.50</span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">W.Bal</span>
+            <div class="ctrl-btns">
+              <div class="ctrl-btn on" id="wbA"  onclick="sendCmd('wb','auto');setActive('wbA','wbS','wbCl','wbT','wbF')">Auto</div>
+              <div class="ctrl-btn"    id="wbS"  onclick="sendCmd('wb','sunny');setActive('wbS','wbA','wbCl','wbT','wbF')">☀️</div>
+              <div class="ctrl-btn"    id="wbCl" onclick="sendCmd('wb','cloudy');setActive('wbCl','wbA','wbS','wbT','wbF')">☁️</div>
+              <div class="ctrl-btn"    id="wbT"  onclick="sendCmd('wb','tungsten');setActive('wbT','wbA','wbS','wbCl','wbF')">💡</div>
+              <div class="ctrl-btn"    id="wbF"  onclick="sendCmd('wb','fluorescent');setActive('wbF','wbA','wbS','wbCl','wbT')">🔆</div>
+            </div>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Torch</span>
+            <div class="ctrl-btns">
+              <div class="ctrl-btn on" id="tOff" onclick="sendCmd('torch','off');setActive('tOff','tOn')">Off</div>
+              <div class="ctrl-btn"    id="tOn"  onclick="sendCmd('torch','on');setActive('tOn','tOff')">🔦 On</div>
+            </div>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Audio</span>
+            <div class="ctrl-btns">
+              <div class="ctrl-btn on" id="audOn"  onclick="sendCmd('audio','on');setActive('audOn','audOff')">🎙 On</div>
+              <div class="ctrl-btn"    id="audOff" onclick="sendCmd('audio','off');setActive('audOff','audOn')">🔇 Off</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="sec">
+        <div class="sec-title">Live Stats</div>
+        <div class="sgrid">
+          <div class="scard"><div class="slbl">DURATION</div><div class="sval g" id="sDur">--:--</div></div>
+          <div class="scard"><div class="slbl">TAKES</div><div class="sval" id="sTakes">0</div></div>
+          <div class="scard"><div class="slbl">FPS</div><div class="sval" id="sFPS">--</div></div>
+          <div class="scard"><div class="slbl">RESOLUTION</div><div class="sval" id="sRes" style="font-size:10px;line-height:1.4">--</div></div>
+        </div>
+      </div>
+
+      <!-- TAKES -->
+      <div class="sec" style="flex:1">
+        <div class="sec-title">Laptop Recordings</div>
+        <div class="takes" id="takesList"><div class="no-takes">No recordings yet</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PHONE VIEW ═══════════════ -->
+<div class="phone-pg" id="phonePage">
+
+  <!-- Raw camera preview for the user -->
+  <div class="ph-preview-wrap">
+    <video id="phonePrev" autoplay playsinline muted></video>
+    <!-- Hidden canvas: rotates portrait→landscape before streaming -->
+    <canvas id="phoneCanvas"></canvas>
+
+    <div class="ph-rec-ind" id="phRecInd"><div class="rec-dot"></div> REC</div>
+    <div class="ph-tc" id="phTc">00:00:00</div>
+    <div class="ph-orient-badge" id="phOrientBadge">📐 Rotate landscape for 16:9</div>
+  </div>
+
+  <!-- Bottom controls -->
+  <div class="ph-bar">
+
+    <!-- Top row -->
+    <div class="ph-toprow">
+      <div>
+        <div class="ph-brand">CamMonitor Pro</div>
+        <div class="ph-connstat" id="phConnStat">Not connected to laptop</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <button class="ph-recbtn" id="phRecBtn" onclick="phToggleRec()">⏺</button>
+        <div class="ph-takes-lbl" id="phTakesLbl">0 takes</div>
+      </div>
+    </div>
+
+    <!-- CONNECT -->
+    <div class="ph-sec">
+      <div class="ph-sec-hdr" onclick="toggleSec('phConnect')">
+        <span>🔗 CONNECT TO LAPTOP</span><span class="arr">▾</span>
+      </div>
+      <div class="ph-sec-body" id="phConnect" style="max-height:120px">
+        <div class="ph-connect-row">
+          <input class="code-inp" id="codeInp" maxlength="6" placeholder="Room code" autocomplete="off"/>
+          <button class="btn g" onclick="connectPhone()" id="phBtn" style="height:36px;padding:0 14px;font-size:11px;flex-shrink:0">📡 Connect</button>
+        </div>
+        <div class="ph-status" id="phStatus" style="margin-top:5px">Enter 6-digit code from laptop</div>
+      </div>
+    </div>
+
+    <!-- CAMERA CONTROLS -->
+    <div class="ph-sec">
+      <div class="ph-sec-hdr" onclick="toggleSec('phCamCtrls')">
+        <span>🎥 CAMERA CONTROLS</span><span class="arr">▾</span>
+      </div>
+      <div class="ph-sec-body" id="phCamCtrls" style="max-height:500px">
+        <div class="ph-ctrl-grid">
+
+          <div class="ph-crow">
+            <span class="ph-clbl">Camera</span>
+            <div class="ph-cbtns">
+              <div class="ph-cbtn on" id="phBack"  onclick="setFacing('environment')">🔙 Back</div>
+              <div class="ph-cbtn"    id="phFront" onclick="setFacing('user')">🤳 Front</div>
+            </div>
+          </div>
+
+          <div class="ph-crow">
+            <span class="ph-clbl">Quality</span>
+            <select class="cam-sel" id="phQuality" onchange="restartCam()" style="flex:1;font-size:9px;padding:4px">
+              <option value="4k">4K (3840×2160)</option>
+              <option value="2k">2K (2560×1440)</option>
+              <option value="1080" selected>1080p ← recommended</option>
+              <option value="720">720p</option>
+            </select>
+          </div>
+
+          <div class="ph-crow">
+            <span class="ph-clbl">Zoom</span>
+            <input type="range" id="phZoom" min="1" max="10" step="0.1" value="1" style="flex:1"
+              oninput="applyZoom(this.value);document.getElementById('phZoomVal').textContent=parseFloat(this.value).toFixed(1)+'×'">
+            <span class="ph-cval" id="phZoomVal">1×</span>
+          </div>
+
+          <div class="ph-crow">
+            <span class="ph-clbl">Exposure</span>
+            <input type="range" id="phExp" min="-4" max="4" step="0.5" value="0" style="flex:1"
+              oninput="applyExposure(this.value);document.getElementById('phExpVal').textContent=(parseFloat(this.value)>0?'+':'')+this.value">
+            <span class="ph-cval" id="phExpVal">0</span>
+          </div>
+
+          <div class="ph-crow">
+            <span class="ph-clbl">Focus</span>
+            <div class="ph-cbtns">
+              <div class="ph-cbtn on" id="phFA" onclick="applyFocus('auto')">Auto</div>
+              <div class="ph-cbtn"    id="phFM" onclick="applyFocus('manual')">Manual</div>
+              <div class="ph-cbtn"    id="phFMa" onclick="applyFocus('macro')">Macro</div>
+            </div>
+          </div>
+
+          <div class="ph-crow" id="phFDistRow" style="display:none">
+            <span class="ph-clbl">Dist</span>
+            <input type="range" id="phFDist" min="0" max="1" step="0.01" value="0.5" style="flex:1"
+              oninput="applyFocusDist(this.value);document.getElementById('phFDistVal').textContent=parseFloat(this.value).toFixed(2)">
+            <span class="ph-cval" id="phFDistVal">0.50</span>
+          </div>
+
+          <div class="ph-crow">
+            <span class="ph-clbl">W.Bal</span>
+            <div class="ph-cbtns">
+              <div class="ph-cbtn on" id="phWA"  onclick="applyWB('auto','phWA')">Auto</div>
+              <div class="ph-cbtn"    id="phWS"  onclick="applyWB('sunny','phWS')">☀️</div>
+              <div class="ph-cbtn"    id="phWCl" onclick="applyWB('cloudy','phWCl')">☁️</div>
+              <div class="ph-cbtn"    id="phWT"  onclick="applyWB('tungsten','phWT')">💡</div>
+              <div class="ph-cbtn"    id="phWF"  onclick="applyWB('fluorescent','phWF')">🔆</div>
+            </div>
+          </div>
+
+          <div class="ph-crow">
+            <span class="ph-clbl">Torch</span>
+            <div class="ph-cbtns">
+              <div class="ph-cbtn on" id="phTOff" onclick="applyTorch(false)">Off</div>
+              <div class="ph-cbtn"    id="phTOn"  onclick="applyTorch(true)">🔦 On</div>
+            </div>
+          </div>
+
+          <div class="ph-crow">
+            <span class="ph-clbl">Audio</span>
+            <div class="ph-cbtns">
+              <div class="ph-cbtn on" id="phAOn"  onclick="setAudioEnabled(true)">🎙 On</div>
+              <div class="ph-cbtn"    id="phAOff" onclick="setAudioEnabled(false)">🔇 Off</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- RECORDINGS -->
+    <div class="ph-sec">
+      <div class="ph-sec-hdr" onclick="toggleSec('phRecs')">
+        <span>💾 MY RECORDINGS</span><span class="arr">▾</span>
+      </div>
+      <div class="ph-sec-body" id="phRecs" style="max-height:300px">
+        <div class="takes" id="phTakesList"><div class="no-takes">No recordings yet</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// SHARED
+// ════════════════════════════════════════════════════
+const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// Laptop state
+let laptopStream = null, isMirrored = false, mode = 'webrtc';
+let laptopPeer = null, dataPeer = null, laptopDataConn = null;
+let roomCode = '';
+let recorder = null, chunks = [], recStart = null, pausedMs = 0, pauseAt = null;
+let isRec = false, isPaused = false, tcInterval = null;
+let takes = [], takeN = 0;
+
+// Phone state
+let rawStream = null;           // from getUserMedia (may be portrait)
+let canvasStream = null;        // from canvas (always landscape)
+let phonePeer = null, phoneDataConn = null;
+let phRecorder = null, phChunks = [], phRecStart = null, phPausedMs = 0;
+let phIsRec = false, phTakes = [], phTakeN = 0, phTcInt = null;
+let phoneFacing = 'environment', phAudio = true;
+let canvasRunning = false, canvasAnimId = null;
+
+// ════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+  if (IS_MOBILE) {
+    document.getElementById('laptopPage').style.display = 'none';
+    document.getElementById('phonePage').style.display = 'flex';
+    phoneInit();
+  } else {
+    const h = location.hash.replace('#','').toUpperCase();
+    if (h.length >= 4 && document.getElementById('codeInp')) document.getElementById('codeInp').value = h;
+    setupFPS(); syncBtns();
+  }
+});
+
+// ════════════════════════════════════════════════════
+// PHONE — CAMERA
+// ════════════════════════════════════════════════════
+async function phoneInit() {
+  const h = location.hash.replace('#','').toUpperCase();
+  if (h.length >= 4) document.getElementById('codeInp').value = h;
+  await startCam();
+  // watch orientation to update badge
+  window.addEventListener('resize', updateOrientBadge);
+  updateOrientBadge();
+}
+
+function resConstraints(val) {
+  const m = { '4k':[3840,2160], '2k':[2560,1440], '1080':[1920,1080], '720':[1280,720] };
+  return m[val] || [1920,1080];
+}
+
+async function startCam() {
+  const qVal = document.getElementById('phQuality')?.value || '1080';
+  const [idealW, idealH] = resConstraints(qVal);
+
+  // Try highest res first, fall back
+  const tries = [
+    { facingMode: phoneFacing, width:{ideal:idealW}, height:{ideal:idealH}, frameRate:{ideal:60,min:24} },
+    { facingMode: phoneFacing, width:{ideal:1920}, height:{ideal:1080} },
+    { facingMode: phoneFacing, width:{ideal:1280}, height:{ideal:720} },
+    { facingMode: phoneFacing }
+  ];
+
+  let s = null;
+  for (const vc of tries) {
+    try {
+      const audioConf = phAudio
+        ? { echoCancellation:true, noiseSuppression:true, sampleRate:48000 }
+        : false;
+      s = await navigator.mediaDevices.getUserMedia({ video: vc, audio: audioConf });
+      break;
+    } catch(e) { continue; }
+  }
+  if (!s) { document.getElementById('phStatus').textContent = '⚠ Camera unavailable'; return; }
+
+  // Stop old stream
+  if (rawStream) rawStream.getTracks().forEach(t => t.stop());
+  rawStream = s;
+
+  // Show preview to user (raw, may be portrait — that's fine for preview)
+  const prev = document.getElementById('phonePrev');
+  prev.srcObject = s;
+
+  // Start canvas rotation pipeline
+  prev.onloadedmetadata = () => { prev.play(); startCanvasPipeline(s); };
+
+  updateOrientBadge();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// THE KEY FIX: Canvas pipeline
+// Reads each frame from the camera video.
+// If the camera is portrait (h > w), rotates 90° so
+// the OUTPUT canvas is always landscape (16:9).
+// The canvas stream is what gets sent via WebRTC.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function startCanvasPipeline(mediaStream) {
+  if (canvasAnimId) cancelAnimationFrame(canvasAnimId);
+
+  const vid = document.getElementById('phonePrev');
+  const cvs = document.getElementById('phoneCanvas');
+  const ctx = cvs.getContext('2d');
+
+  function drawFrame() {
+    if (!vid.videoWidth || vid.paused || vid.ended) { canvasAnimId = requestAnimationFrame(drawFrame); return; }
+
+    const vw = vid.videoWidth, vh = vid.videoHeight;
+    const isPortrait = vh > vw;
+
+    if (isPortrait) {
+      // Phone is portrait → rotate so canvas is landscape
+      // Output canvas size = landscape version of the portrait input
+      const outW = vh, outH = vw; // swap dimensions
+      if (cvs.width !== outW || cvs.height !== outH) { cvs.width = outW; cvs.height = outH; }
+      ctx.save();
+      ctx.translate(outW / 2, outH / 2);
+      ctx.rotate(Math.PI / 2); // 90° clockwise
+      ctx.drawImage(vid, -vw / 2, -vh / 2, vw, vh);
+      ctx.restore();
+    } else {
+      // Already landscape — pass through
+      if (cvs.width !== vw || cvs.height !== vh) { cvs.width = vw; cvs.height = vh; }
+      ctx.drawImage(vid, 0, 0, vw, vh);
+    }
+
+    canvasAnimId = requestAnimationFrame(drawFrame);
+  }
+
+  drawFrame();
+
+  // Create stream from canvas (video) + audio from mic
+  const videoTrack = cvs.captureStream(60).getVideoTracks()[0];
+  const audioTracks = mediaStream.getAudioTracks();
+
+  // Combine
+  const combined = new MediaStream([videoTrack, ...audioTracks]);
+  canvasStream = combined;
+
+  // If already connected to laptop, we need to update the call
+  // (handled in connectPhone by sending the canvas stream)
+}
+
+async function restartCam() { await startCam(); }
+
+async function setFacing(f) {
+  phoneFacing = f;
+  document.getElementById('phBack').classList.toggle('on', f==='environment');
+  document.getElementById('phFront').classList.toggle('on', f==='user');
+  await startCam();
+}
+
+function updateOrientBadge() {
+  const badge = document.getElementById('phOrientBadge');
+  const vid = document.getElementById('phonePrev');
+  if (!vid.videoWidth) return;
+  const isPortrait = vid.videoHeight > vid.videoWidth;
+  // The canvas pipeline fixes it regardless, so always show green
+  badge.textContent = isPortrait ? '📐 Portrait → auto-rotated to 16:9 ✓' : '📐 Landscape 16:9 ✓';
+  badge.className = 'ph-orient-badge ok';
+}
+
+// ════════════════════════════════════════════════════
+// PHONE — CAMERA CONTROLS
+// ════════════════════════════════════════════════════
+function getTrack() {
+  return rawStream?.getVideoTracks()[0] || null;
+}
+
+async function applyZoom(val) {
+  const t = getTrack(); if (!t) return;
+  try {
+    const caps = t.getCapabilities();
+    if (caps.zoom) {
+      const z = caps.zoom.min + (val-1)/9 * (caps.zoom.max - caps.zoom.min);
+      await t.applyConstraints({ advanced:[{ zoom: Math.min(caps.zoom.max, Math.max(caps.zoom.min, z)) }] });
+    }
+  } catch(e) {}
+}
+
+async function applyExposure(val) {
+  const t = getTrack(); if (!t) return;
+  try {
+    const caps = t.getCapabilities();
+    if (caps.exposureCompensation) {
+      const ev = Math.max(caps.exposureCompensation.min, Math.min(caps.exposureCompensation.max, parseFloat(val)));
+      await t.applyConstraints({ advanced:[{ exposureMode:'manual', exposureCompensation: ev }] });
+    }
+  } catch(e) {}
+}
+
+async function applyFocus(mode) {
+  document.getElementById('phFA').classList.toggle('on', mode==='auto');
+  document.getElementById('phFM').classList.toggle('on', mode==='manual');
+  document.getElementById('phFMa').classList.toggle('on', mode==='macro');
+  document.getElementById('phFDistRow').style.display = mode==='manual' ? 'flex' : 'none';
+  const t = getTrack(); if (!t) return;
+  try {
+    const modeMap = { auto:'continuous', manual:'manual', macro:'macro' };
+    await t.applyConstraints({ advanced:[{ focusMode: modeMap[mode]||'continuous' }] });
+  } catch(e) {}
+}
+
+async function applyFocusDist(val) {
+  const t = getTrack(); if (!t) return;
+  try {
+    const caps = t.getCapabilities();
+    if (caps.focusDistance) {
+      const fd = caps.focusDistance.min + val * (caps.focusDistance.max - caps.focusDistance.min);
+      await t.applyConstraints({ advanced:[{ focusDistance: fd }] });
+    }
+  } catch(e) {}
+}
+
+async function applyWB(wbMode, btnId) {
+  ['phWA','phWS','phWCl','phWT','phWF'].forEach(id => document.getElementById(id)?.classList.remove('on'));
+  document.getElementById(btnId)?.classList.add('on');
+  const t = getTrack(); if (!t) return;
+  try {
+    const wbTemp = { sunny:5500, cloudy:6500, tungsten:2800, fluorescent:4000 };
+    if (wbMode==='auto') await t.applyConstraints({ advanced:[{ whiteBalanceMode:'continuous' }] });
+    else await t.applyConstraints({ advanced:[{ whiteBalanceMode:'manual', colorTemperature: wbTemp[wbMode]||5500 }] });
+  } catch(e) {}
+}
+
+async function applyTorch(on) {
+  document.getElementById('phTOff').classList.toggle('on', !on);
+  document.getElementById('phTOn').classList.toggle('on', on);
+  const t = getTrack(); if (!t) return;
+  try { await t.applyConstraints({ advanced:[{ torch: on }] }); } catch(e) {}
+}
+
+async function setAudioEnabled(on) {
+  phAudio = on;
+  document.getElementById('phAOn').classList.toggle('on', on);
+  document.getElementById('phAOff').classList.toggle('on', !on);
+  await startCam();
+}
+
+// ════════════════════════════════════════════════════
+// PHONE — RECORDING (records canvas stream = landscape)
+// ════════════════════════════════════════════════════
+function phToggleRec() {
+  phIsRec ? phStopRec() : phStartRec();
+}
+
+function phStartRec() {
+  const s = canvasStream || rawStream;
+  if (!s) { document.getElementById('phStatus').textContent = '⚠ Camera not ready'; return; }
+
+  phChunks = []; phRecStart = Date.now(); phPausedMs = 0; phIsRec = true; phTakeN++;
+
+  const mimes = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+  let mime = mimes.find(m => MediaRecorder.isTypeSupported(m)) || '';
+
+  phRecorder = new MediaRecorder(s, mime ? { mimeType: mime } : {});
+  phRecorder.ondataavailable = e => { if(e.data.size>0) phChunks.push(e.data); };
+  phRecorder.onstop = phSave;
+  phRecorder.start(100);
+
+  document.getElementById('phRecBtn').classList.add('rec');
+  document.getElementById('phRecBtn').textContent = '⏹';
+  document.getElementById('phRecInd').classList.add('on');
+  document.getElementById('phTc').classList.add('on');
+  phTcInt = setInterval(phTickTC, 100);
+
+  if (phoneDataConn) phoneDataConn.send({ type:'rec-started' });
+}
+
+function phStopRec() {
+  if (!phRecorder) return;
+  phRecorder.stop(); phIsRec = false;
+  clearInterval(phTcInt);
+  document.getElementById('phRecBtn').classList.remove('rec');
+  document.getElementById('phRecBtn').textContent = '⏺';
+  document.getElementById('phRecInd').classList.remove('on');
+  document.getElementById('phTc').classList.remove('on');
+  if (phoneDataConn) phoneDataConn.send({ type:'rec-stopped' });
+}
+
+function phSave() {
+  const mime = phRecorder.mimeType || 'video/webm';
+  const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+  const blob = new Blob(phChunks, { type: mime });
+  const url = URL.createObjectURL(blob);
+  const dur = (Date.now() - phRecStart - phPausedMs) / 1000;
+  phTakes.push({ n: phTakeN, url, dur, ext });
+  phRenderTakes();
+  document.getElementById('phTakesLbl').textContent = phTakes.length + ' take' + (phTakes.length!==1?'s':'');
+}
+
+function phRenderTakes() {
+  const el = document.getElementById('phTakesList');
+  if (!phTakes.length) { el.innerHTML = '<div class="no-takes">No recordings yet</div>'; return; }
+  el.innerHTML = phTakes.slice().reverse().map(t => `
+    <div class="take">
+      <div class="tnum">T${t.n}</div>
+      <div class="tinfo"><div class="tname">Take ${t.n}</div><div class="tdur">${fmtDur(t.dur)}</div></div>
+      <button class="tdl" onclick="phDl(${t.n})">↓ Save</button>
+    </div>`).join('');
+}
+
+function phDl(n) {
+  const t = phTakes.find(x=>x.n===n); if(!t) return;
+  const a = document.createElement('a'); a.href=t.url; a.download=`Take_${n}_landscape.${t.ext||'webm'}`; a.click();
+}
+
+function phTickTC() {
+  if (!phRecStart) return;
+  const el = Math.max(0, Date.now()-phRecStart-phPausedMs);
+  const tot = Math.floor(el/1000);
+  const h=String(Math.floor(tot/3600)).padStart(2,'0');
+  const m=String(Math.floor((tot%3600)/60)).padStart(2,'0');
+  const s=String(tot%60).padStart(2,'0');
+  document.getElementById('phTc').textContent=`${h}:${m}:${s}`;
+}
+
+// ════════════════════════════════════════════════════
+// PHONE — PEERJS (send CANVAS stream = always landscape)
+// ════════════════════════════════════════════════════
+async function connectPhone() {
+  const btn = document.getElementById('phBtn');
+  const sta = document.getElementById('phStatus');
+  const code = document.getElementById('codeInp').value.trim().toUpperCase();
+  if (code.length < 4) { sta.textContent='⚠ Enter room code from laptop'; sta.style.color='var(--amber)'; return; }
+
+  btn.disabled=true; btn.textContent='⏳…';
+  sta.textContent='Connecting…'; sta.style.color='var(--amber)';
+
+  // Make sure camera + canvas are running
+  if (!rawStream) await startCam();
+  await new Promise(r => setTimeout(r, 600)); // wait for canvas to init
+  if (!canvasStream) { sta.textContent='⚠ Camera not ready'; btn.disabled=false; btn.textContent='📡 Connect'; return; }
+
+  if (phonePeer) { try { phonePeer.destroy(); } catch(e) {} }
+  phonePeer = new Peer(undefined, { debug:0 });
+
+  phonePeer.on('open', () => {
+    // Data channel for receiving commands
+    phoneDataConn = phonePeer.connect('cammonitor-data-'+code, { reliable:true });
+    phoneDataConn.on('open', () => { sta.textContent='Commands ready'; });
+    phoneDataConn.on('data', handleCmd);
+    phoneDataConn.on('error', e => console.log('data err',e));
+
+    // ★ Send the CANVAS stream (always 16:9 landscape)
+    const call = phonePeer.call('cammonitor-'+code, canvasStream);
+    if (!call) { sta.textContent='⚠ Call failed'; btn.disabled=false; btn.textContent='📡 Connect'; return; }
+    call.on('stream', () => {
+      document.getElementById('phConnStat').textContent='🟢 Streaming 16:9 to laptop';
+      document.getElementById('phConnStat').style.color='var(--accent)';
+      sta.textContent='✓ Streaming — laptop sees landscape!';
+      sta.style.color='var(--accent)';
+      btn.textContent='✓ Live';
+    });
+    call.on('close', () => {
+      document.getElementById('phConnStat').textContent='Disconnected';
+      document.getElementById('phConnStat').style.color='var(--muted)';
+      btn.disabled=false; btn.textContent='📡 Connect';
+    });
+    call.on('error', e => { sta.textContent='⚠ '+e.message; sta.style.color='var(--red)'; btn.disabled=false; btn.textContent='📡 Connect'; });
+  });
+
+  phonePeer.on('error', err => {
+    let msg='⚠ Connection failed';
+    if (err.type==='peer-unavailable') msg='⚠ Laptop not found — generate a code first';
+    if (err.type==='network') msg='⚠ Network error — same WiFi?';
+    sta.textContent=msg; sta.style.color='var(--red)';
+    btn.disabled=false; btn.textContent='📡 Connect';
+  });
+}
+
+// Handle commands from laptop
+function handleCmd(msg) {
+  if (!msg?.type) return;
+  switch(msg.type) {
+    case 'zoom':      document.getElementById('phZoom').value=msg.v; applyZoom(msg.v); document.getElementById('phZoomVal').textContent=parseFloat(msg.v).toFixed(1)+'×'; break;
+    case 'exposure':  document.getElementById('phExp').value=msg.v; applyExposure(msg.v); document.getElementById('phExpVal').textContent=(msg.v>0?'+':'')+msg.v; break;
+    case 'focus':     applyFocus(msg.v); break;
+    case 'focusDist': document.getElementById('phFDist').value=msg.v; applyFocusDist(msg.v); break;
+    case 'wb':        applyWB(msg.v, {auto:'phWA',sunny:'phWS',cloudy:'phWCl',tungsten:'phWT',fluorescent:'phWF'}[msg.v]||'phWA'); break;
+    case 'torch':     applyTorch(msg.v==='on'); break;
+    case 'audio':     setAudioEnabled(msg.v==='on'); break;
+    case 'flip':      setFacing(phoneFacing==='environment'?'user':'environment'); break;
+    case 'res':       document.getElementById('phQuality').value=msg.v; restartCam(); break;
+    case 'rec-start': phStartRec(); break;
+    case 'rec-stop':  phStopRec(); break;
+  }
+}
+
+// ════════════════════════════════════════════════════
+// LAPTOP — PEERJS
+// ════════════════════════════════════════════════════
+function mkCode() {
+  const ch='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length:6},()=>ch[Math.random()*ch.length|0]).join('');
+}
+
+function genRoom() {
+  const btn=document.getElementById('genBtn');
+  btn.textContent='⏳ Setting up…'; btn.disabled=true;
+  roomCode=mkCode();
+  if (laptopPeer) { try{laptopPeer.destroy();}catch(e){} }
+  if (dataPeer)   { try{dataPeer.destroy();}catch(e){} }
+
+  laptopPeer = new Peer('cammonitor-'+roomCode, {debug:0});
+  dataPeer   = new Peer('cammonitor-data-'+roomCode, {debug:0});
+
+  dataPeer.on('connection', conn => {
+    laptopDataConn = conn;
+    conn.on('data', msg => {
+      if (msg.type==='rec-started') { document.getElementById('recPill').style.display='flex'; document.getElementById('recBadge').classList.add('on'); }
+      if (msg.type==='rec-stopped') { document.getElementById('recPill').style.display='none'; document.getElementById('recBadge').classList.remove('on'); }
+    });
+  });
+
+  laptopPeer.on('open', () => {
+    const pageUrl = location.href.split('#')[0];
+    const shareUrl = pageUrl+'#'+roomCode;
+    document.getElementById('rcodeVal').textContent = roomCode;
+    document.getElementById('rcodeUrl').textContent = shareUrl;
+    document.getElementById('rcodeBox').style.display='block';
+    document.getElementById('qrWrap').style.display='flex';
+    document.getElementById('copyBtn').style.display='block';
+    document.getElementById('ipHint').style.display='block';
+    drawQR(shareUrl);
+    btn.textContent='🔄 New Code'; btn.disabled=false;
+    document.getElementById('connTxt').textContent='Waiting for phone…';
+  });
+
+  laptopPeer.on('call', call => {
+    call.answer();
+    call.on('stream', s => {
+      laptopStream = s;
+      const vid = document.getElementById('remoteVideo');
+      vid.srcObject = s;
+      document.getElementById('nofeed').style.display='none';
+      document.getElementById('remoteCtrlSec').style.display='block';
+      document.getElementById('zoomSlider').disabled=false;
+      document.getElementById('expSlider').disabled=false;
+      document.getElementById('btnFlip').disabled=false;
+      setConnected(); syncBtns(); watchRes(vid);
+    });
+    call.on('close', setDisconnected);
+    call.on('error', setDisconnected);
+  });
+
+  laptopPeer.on('error', err => {
+    btn.textContent='🔗 Generate Room Code'; btn.disabled=false;
+    if (err.type==='unavailable-id') genRoom();
+  });
+}
+
+function sendCmd(type, v) {
+  if (!laptopDataConn) return;
+  try { laptopDataConn.send({ type, v }); } catch(e) {}
+}
+
+function copyUrl() {
+  const url=document.getElementById('rcodeUrl').textContent;
+  navigator.clipboard.writeText(url).then(()=>{
+    const b=document.getElementById('copyBtn'); b.textContent='✓ Copied!';
+    setTimeout(()=>b.textContent='📋 Copy link for phone',2000);
+  });
+}
+
+// ════════════════════════════════════════════════════
+// LAPTOP RECORDING
+// ════════════════════════════════════════════════════
+function startRec() {
+  sendCmd('rec-start');
+  if (!laptopStream) return;
+  chunks=[]; recStart=Date.now(); pausedMs=0; isPaused=false; takeN++;
+  let mime='video/webm;codecs=vp9,opus';
+  if (!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
+  recorder=new MediaRecorder(laptopStream,{mimeType:mime});
+  recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  recorder.onstop=saveTake;
+  recorder.start(100);
+  isRec=true;
+  document.getElementById('recBadge').classList.add('on');
+  document.getElementById('recPill').style.display='flex';
+  tcInterval=setInterval(tickTC,100);
+  syncBtns();
+}
+
+function togglePause() {
+  if (!recorder) return;
+  if (isPaused){recorder.resume();pausedMs+=Date.now()-pauseAt;isPaused=false;document.getElementById('recBadge').classList.add('on');}
+  else{recorder.pause();pauseAt=Date.now();isPaused=true;document.getElementById('recBadge').classList.remove('on');}
+  syncBtns();
+}
+
+function stopRec() {
+  sendCmd('rec-stop');
+  if (!recorder) return;
+  recorder.stop();isRec=false;isPaused=false;
+  clearInterval(tcInterval);
+  document.getElementById('recBadge').classList.remove('on');
+  document.getElementById('recPill').style.display='none';
+  document.getElementById('timecode').textContent='00:00:00';
+  document.getElementById('sDur').textContent='--:--';
+  syncBtns();
+}
+
+function saveTake() {
+  const blob=new Blob(chunks,{type:'video/webm'});
+  const url=URL.createObjectURL(blob);
+  const dur=(Date.now()-recStart-pausedMs)/1000;
+  takes.push({n:takeN,url,dur});
+  renderTakes();
+  document.getElementById('sTakes').textContent=takes.length;
+}
+
+function renderTakes() {
+  const el=document.getElementById('takesList');
+  if(!takes.length){el.innerHTML='<div class="no-takes">No recordings yet</div>';return;}
+  el.innerHTML=takes.slice().reverse().map(t=>`
+    <div class="take">
+      <div class="tnum">T${t.n}</div>
+      <div class="tinfo"><div class="tname">Take ${t.n}</div><div class="tdur">${fmtDur(t.dur)}</div></div>
+      <button class="tdl" onclick="dlTake(${t.n})">↓ Save</button>
+    </div>`).join('');
+}
+
+function dlTake(n) {
+  const t=takes.find(x=>x.n===n);if(!t)return;
+  const a=document.createElement('a');a.href=t.url;a.download=`Take_${n}.webm`;a.click();
+}
+
+// ════════════════════════════════════════════════════
+// LAPTOP LOCAL CAM
+// ════════════════════════════════════════════════════
+function setMode(m) {
+  mode=m;
+  document.getElementById('tabPhone').classList.toggle('on',m==='webrtc');
+  document.getElementById('tabLocal').classList.toggle('on',m==='local');
+  document.getElementById('webrtcSec').style.display=m==='webrtc'?'block':'none';
+  document.getElementById('localSec').style.display=m==='local'?'block':'none';
+  if(m==='local')listCams();
+}
+async function listCams() {
+  try {
+    await navigator.mediaDevices.getUserMedia({video:true});
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const cams=devs.filter(d=>d.kind==='videoinput');
+    document.getElementById('camSel').innerHTML=cams.map((c,i)=>`<option value="${c.deviceId}">${c.label||'Camera '+(i+1)}</option>`).join('');
+  }catch(e){}
+}
+async function startLocalCam() {
+  const sel=document.getElementById('camSel');
+  try {
+    const s=await navigator.mediaDevices.getUserMedia({
+      video:{deviceId:sel.value?{exact:sel.value}:undefined,width:{ideal:1920},height:{ideal:1080},aspectRatio:{ideal:16/9}},
+      audio:true
+    });
+    laptopStream=s;
+    const vid=document.getElementById('remoteVideo');
+    vid.srcObject=s;
+    document.getElementById('nofeed').style.display='none';
+    setConnected();syncBtns();watchRes(vid);
+  }catch(e){alert('Camera error: '+e.message);}
+}
+async function switchCam(){if(mode==='local'&&laptopStream){laptopStream.getTracks().forEach(t=>t.stop());await startLocalCam();}}
+
+// ════════════════════════════════════════════════════
+// LAPTOP UI HELPERS
+// ════════════════════════════════════════════════════
+function setConnected() {
+  const dot=document.getElementById('logoDot');
+  dot.style.background='var(--accent)';dot.style.boxShadow='0 0 6px var(--accent)';
+  document.getElementById('connPill').classList.add('ok');
+  document.getElementById('connTxt').textContent='Phone connected ✓';
+  const gb=document.getElementById('genBtn');if(gb)gb.textContent='🔄 New Code';
+}
+function setDisconnected() {
+  document.getElementById('connPill').classList.remove('ok');
+  document.getElementById('connTxt').textContent='Disconnected';
+  laptopStream=null;syncBtns();
+}
+function syncBtns() {
+  const s=document.getElementById('btnStart');
+  const p=document.getElementById('btnPause');
+  const st=document.getElementById('btnStop');
+  if(!isRec){s.disabled=!laptopStream;p.disabled=true;st.disabled=true;p.textContent='⏸ Pause';}
+  else if(!isPaused){s.disabled=true;p.disabled=false;st.disabled=false;p.textContent='⏸ Pause';}
+  else{s.disabled=true;p.disabled=false;st.disabled=false;p.textContent='▶ Resume';}
+}
+function tickTC() {
+  if(!recStart)return;
+  let el=Math.max(0,Date.now()-recStart-pausedMs);
+  if(isPaused)el-=(Date.now()-pauseAt);
+  const tot=Math.floor(el/1000);
+  const h=String(Math.floor(tot/3600)).padStart(2,'0');
+  const m=String(Math.floor((tot%3600)/60)).padStart(2,'0');
+  const s=String(tot%60).padStart(2,'0');
+  document.getElementById('timecode').textContent=`${h}:${m}:${s}`;
+  document.getElementById('sDur').textContent=`${m}:${s}`;
+}
+function setupFPS() {
+  const vid=document.getElementById('remoteVideo');if(!vid)return;
+  let last=0,fr=0;
+  const loop=()=>{
+    const now=performance.now();
+    if(vid.srcObject&&vid.readyState>=2){fr++;if(now-last>=1000){document.getElementById('sFPS').textContent=fr;fr=0;last=now;}}
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+function watchRes(vid) {
+  const upd=()=>{
+    if(!vid.videoWidth)return;
+    const res=`${vid.videoWidth}×${vid.videoHeight}`;
+    document.getElementById('sRes').textContent=res;
+    document.getElementById('resInfo').textContent=res;
+    const badge=document.getElementById('resBadge');
+    badge.style.display='block';
+    const is169=Math.abs(vid.videoWidth/vid.videoHeight - 16/9) < 0.05;
+    badge.textContent=is169?'16:9 ✓':'⚠ Non-16:9';
+    badge.style.background=is169?'rgba(0,229,160,.15)':'rgba(255,170,0,.15)';
+    badge.style.color=is169?'var(--accent)':'var(--amber)';
+    badge.style.border=is169?'1px solid rgba(0,229,160,.3)':'1px solid rgba(255,170,0,.3)';
+  };
+  vid.addEventListener('loadedmetadata',upd);
+  setInterval(upd,2000);
+}
+function drawQR(url) {
+  const c=document.getElementById('qrCanvas'),sz=c.width;
+  const img=new Image();img.crossOrigin='anonymous';
+  img.onload=()=>{const ctx=c.getContext('2d');ctx.fillStyle='#08080d';ctx.fillRect(0,0,sz,sz);ctx.drawImage(img,3,3,sz-6,sz-6);};
+  img.src=`https://api.qrserver.com/v1/create-qr-code/?size=${sz}x${sz}&bgcolor=08080d&color=00e5a0&data=${encodeURIComponent(url)}`;
+}
+function setActive(onId,...offIds) {
+  document.getElementById(onId)?.classList.add('on');
+  offIds.forEach(id=>document.getElementById(id)?.classList.remove('on'));
+}
+function showFocusDist(show) { document.getElementById('focusDistRow').style.display=show?'flex':'none'; }
+function toggleMirror(){isMirrored=!isMirrored;document.getElementById('remoteVideo').style.transform=isMirrored?'scaleX(-1)':'';document.getElementById('btnMirror').textContent=isMirrored?'⟷ Unmirror':'⟷ Mirror';}
+function toggleFS(){const v=document.getElementById('remoteVideo');document.fullscreenElement?document.exitFullscreen():v.requestFullscreen().catch(()=>{});}
+
+// ════════════════════════════════════════════════════
+// PHONE UI UTILS
+// ════════════════════════════════════════════════════
+function toggleSec(id) {
+  const body=document.getElementById(id);
+  const hdr=body.previousElementSibling;
+  body.classList.toggle('closed');
+  hdr.classList.toggle('closed');
+}
+
+// ════════════════════════════════════════════════════
+// SHARED UTILS
+// ════════════════════════════════════════════════════
+function fmtDur(s){const m=Math.floor(s/60),sec=Math.floor(s%60);return`${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;}
+
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.code==='Space'){e.preventDefault();if(isRec)togglePause();}
+  if(e.code==='KeyR'&&e.ctrlKey){e.preventDefault();if(!isRec&&laptopStream)startRec();}
+  if(e.code==='KeyS'&&e.ctrlKey){e.preventDefault();if(isRec)stopRec();}
+});
+</script>
+</body>
+</html>
